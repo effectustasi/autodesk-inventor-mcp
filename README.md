@@ -69,3 +69,10 @@ Issues and PRs are welcome, especially new read-only tools (assemblies, sketches
 ## License
 
 MIT. Not affiliated with or endorsed by Autodesk. Autodesk and Inventor are trademarks of Autodesk, Inc.
+
+## More tools by effectustasi
+
+- [agent-receipts](https://github.com/effectustasi/agent-receipts): Skills that make AI coding agents prove "done" with real test output
+- [blender-dlss5-neural-rendering](https://github.com/effectustasi/blender-dlss5-neural-rendering): Blender viewport and renders through DLSS 5 neural rendering
+- [metahuman-face-capture](https://github.com/effectustasi/metahuman-face-capture): MetaHuman face capture from a webcam in Blender
+- [unreal-groom-alembic-exporter](https://github.com/effectustasi/unreal-groom-alembic-exporter): Export UE Groom assets (MetaHuman hair) to Alembic
