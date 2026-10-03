@@ -15,7 +15,7 @@ import sys
 import textwrap
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "inventor", "version": "0.2.0"}
+SERVER_INFO = {"name": "inventor", "version": "0.2.1"}
 
 PS_EXE = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
@@ -357,6 +357,9 @@ def send(msg):
 
 
 def main():
+    # MCP stdio is UTF-8; Windows defaults to the locale code page (e.g. cp1254), which corrupts non-ASCII messages.
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
     for line in sys.stdin:
         line = line.strip()
         if not line:
