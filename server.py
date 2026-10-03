@@ -15,7 +15,7 @@ import sys
 import textwrap
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "inventor", "version": "0.1.0"}
+SERVER_INFO = {"name": "inventor", "version": "0.2.0"}
 
 PS_EXE = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
@@ -224,84 +224,122 @@ def t_script(args):
     return run_ps(body, timeout=int(args.get("timeout", 300)))
 
 
+DOC = {"type": "string",
+       "description": "Display name of an open document, as listed by `status` (e.g. \"Bracket.ipt\"). "
+                      "Omit or leave empty to use the active document."}
+BODY = {"type": "integer", "minimum": 1, "default": 1,
+        "description": "1-based index of the solid/surface body in the part, as listed by `model_info`. Most parts have one body."}
+READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+
 TOOLS = [
     {
         "name": "status",
-        "description": "Connects to the running Inventor session; returns its version and open documents.",
+        "title": "Inventor session status",
+        "description": ("Checks that Autodesk Inventor is running and reachable over COM. Returns the Inventor version, "
+                        "the active document, and every open document with its file path, type and unsaved-changes flag. "
+                        "Call this first to get the document names the other tools accept."),
         "inputSchema": {"type": "object", "properties": {}},
+        "annotations": READ_ONLY,
         "handler": t_status,
     },
     {
         "name": "model_info",
-        "description": "Returns a part document's bodies (face/edge/vertex counts, bounding box in mm) and its feature list.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {"document": {"type": "string", "description": "Document display name; empty means the active document."}},
-        },
+        "title": "Part bodies and features",
+        "description": ("Summarizes a part document: for each body, whether it is solid, its face/edge/vertex counts and "
+                        "its bounding box in mm; plus the feature tree (name, type, suppressed) and the number of Unwrap "
+                        "features. Use it to orient yourself in a model before inspecting individual faces."),
+        "inputSchema": {"type": "object", "properties": {"document": DOC}},
+        "annotations": READ_ONLY,
         "handler": t_model_info,
     },
     {
         "name": "smallest_faces",
-        "description": "Lists the smallest faces with area and center coordinates. Useful for finding import defects (slivers, tiny faces).",
+        "title": "Find the smallest faces",
+        "description": ("Lists the N smallest faces of a body, sorted by area ascending. Each entry has the 1-based face "
+                        "index, area in mm^2, edge count, surface type and center point in mm. Also returns the body's "
+                        "total face count and total area. Use it to find import defects such as sliver or near-zero-area "
+                        "faces from STEP/IGES files; the returned indices work with face_neighbors and unwrap_try."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "document": {"type": "string"},
-                "body": {"type": "integer", "default": 1},
-                "count": {"type": "integer", "default": 15},
+                "document": DOC,
+                "body": BODY,
+                "count": {"type": "integer", "minimum": 1, "default": 15,
+                          "description": "How many of the smallest faces to return."},
             },
         },
+        "annotations": READ_ONLY,
         "handler": t_smallest_faces,
     },
     {
         "name": "face_neighbors",
-        "description": "Lists the faces that share an edge with the given face.",
+        "title": "Faces adjacent to a face",
+        "description": ("Returns the given face and every face that shares an edge with it, each with index, area in "
+                        "mm^2, edge count, surface type and center point in mm; neighbors are sorted by area, largest "
+                        "first. Use it to see what a suspicious small face sits between before excluding or fixing it."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "document": {"type": "string"},
-                "body": {"type": "integer", "default": 1},
-                "index": {"type": "integer", "description": "1-based face index"},
+                "document": DOC,
+                "body": BODY,
+                "index": {"type": "integer", "minimum": 1,
+                          "description": "1-based index of the face to inspect, e.g. from smallest_faces."},
             },
             "required": ["index"],
         },
+        "annotations": READ_ONLY,
         "handler": t_face_neighbors,
     },
     {
         "name": "unwrap_try",
-        "description": ("Tries an Unwrap on the given faces. By default the feature is created and immediately deleted "
-                        "(the document is not changed); keep=true leaves it in place. Returns the success/failure "
-                        "details the GUI does not show."),
+        "title": "Dry-run an Unwrap",
+        "description": ("Attempts Inventor's Unwrap feature on a set of faces and reports what happened: success or the "
+                        "error and Inventor's last error message, time taken, and on success the result face count, "
+                        "area in mm^2 and bounding box in mm. By default the created feature is deleted right away so "
+                        "the document is left unchanged; pass keep=true to leave it in the model. Use it to find which "
+                        "face set unwraps, which the Inventor UI does not tell you."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "document": {"type": "string"},
-                "body": {"type": "integer", "default": 1},
-                "face_indices": {"type": "array", "items": {"type": "integer"},
-                                 "description": "1-based face indices"},
-                "auto_face_chain": {"type": "boolean", "default": False},
-                "merge_result_body": {"type": "boolean", "default": False},
-                "alignment": {"type": "string", "enum": ["origin", "xy", "xz", "yz"], "default": "origin"},
+                "document": DOC,
+                "body": BODY,
+                "face_indices": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 1,
+                                 "description": "1-based indices of the faces to unwrap, as returned by smallest_faces or face_neighbors."},
+                "auto_face_chain": {"type": "boolean", "default": False,
+                                    "description": "Passed to Inventor's Unwrap definition as its auto face chain option."},
+                "merge_result_body": {"type": "boolean", "default": False,
+                                      "description": "Passed to Inventor's Unwrap definition as its merge result body option."},
+                "alignment": {"type": "string", "enum": ["origin", "xy", "xz", "yz"], "default": "origin",
+                              "description": "Passed to Inventor's Unwrap definition as its alignment option: origin, or the XY/XZ/YZ base plane."},
                 "keep": {"type": "boolean", "default": False,
-                         "description": "if true, the created feature stays in the document"},
+                         "description": "If true, the Unwrap feature stays in the document (modifies the model). "
+                                        "If false (default), it is deleted after measuring."},
             },
             "required": ["face_indices"],
         },
+        "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
         "handler": t_unwrap_try,
     },
     {
         "name": "script",
-        "description": ("Runs arbitrary PowerShell against Inventor's COM API. $inv (Application), $MISSING and the "
-                        "Get-Doc/FaceInfo helpers are predefined. The script must write single-line JSON "
-                        "(ConvertTo-Json -Compress)."),
+        "title": "Run PowerShell against Inventor",
+        "description": ("Escape hatch for anything the other tools don't cover: runs arbitrary PowerShell with full "
+                        "access to Inventor's COM API and the user's permissions. Predefined: $inv (Inventor.Application), "
+                        "$MISSING (for optional COM arguments), Get-Doc <name> (document by display name, or active) and "
+                        "FaceInfo <face> (area/center in mm). The script must write exactly one line of JSON, e.g. "
+                        "`@{ n = $inv.Documents.Count } | ConvertTo-Json -Compress`. Prefer the dedicated tools when they "
+                        "fit; this one can modify or close documents."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "script": {"type": "string"},
-                "timeout": {"type": "integer", "default": 300},
+                "script": {"type": "string",
+                           "description": "PowerShell code to run. Must output a single line of JSON."},
+                "timeout": {"type": "integer", "minimum": 1, "default": 300,
+                            "description": "Seconds to wait before the script is abandoned."},
             },
             "required": ["script"],
         },
+        "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
         "handler": t_script,
     },
 ]

@@ -1,5 +1,7 @@
 # inventor-mcp
 
+[![effectustasi/autodesk-inventor-mcp MCP server](https://glama.ai/mcp/servers/effectustasi/autodesk-inventor-mcp/badges/score.svg)](https://glama.ai/mcp/servers/effectustasi/autodesk-inventor-mcp)
+
 An [MCP](https://modelcontextprotocol.io) server that gives AI agents (Claude Code, Claude Desktop, Cursor, Codex…) a **live connection to Autodesk Inventor**.
 
 Ask your agent things like *"which faces in this imported STEP are tiny slivers?"* or *"will Unwrap work on these 12 faces?"* and it reads the answer straight from the open model.
